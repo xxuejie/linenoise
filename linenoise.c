@@ -117,6 +117,27 @@
 #include <unistd.h>
 #include "linenoise.h"
 
+#ifndef __wasi__
+// WASI provides a shimmed version of ioctl, here we use a wrapper
+// function as a workaround
+int tcgetwinsize(int fd, struct winsize *wsz)
+{
+    return ioctl(fd, TIOCGWINSZ, wsz);
+}
+#else
+// WASI has no chmod nor umask, use dummy placeholder functions for now.
+mode_t umask(mode_t mask) {
+    return mask;
+}
+
+int chmod(const char *pathname, mode_t mode) {
+    (void) pathname;
+    (void) mode;
+
+    return 0;
+}
+#endif
+
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
 static char *unsupported_term[] = {"dumb","cons25","emacs",NULL};
@@ -300,7 +321,7 @@ static int getCursorPosition(int ifd, int ofd) {
 static int getColumns(int ifd, int ofd) {
     struct winsize ws;
 
-    if (ioctl(1, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (tcgetwinsize(1, &ws) == -1 || ws.ws_col == 0) {
         /* ioctl() failed. Try to query the terminal itself. */
         int start, cols;
 
